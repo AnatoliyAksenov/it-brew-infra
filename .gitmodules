@@ -1,0 +1,12 @@
+[submodule "mcp"]
+	path = mcp
+	url = https://github.com/AnatoliyAksenov/chat-app-mcp.git
+[submodule "chat"]
+	path = chat
+	url = https://github.com/AnatoliyAksenov/chat-app-mcp.git
+[submodule "backend"]
+	path = backend
+	url = https://github.com/AnatoliyAksenov/chat-app-backend.git
+[submodule "agent"]
+	path = agent
+	url = https://github.com/AnatoliyAksenov/gitlab-agent.git

@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://backend:8080
+        VITE_API_STORAGE_URL: http://minio:9000  
+        USE_PROXY: ${HTTPS_PROXY:-}
+    ports:
+      - "8003:8080"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        API_KEY: ${API_KEY}
+        BASE_URL: ${BASE_URL}
+        FOLDER: ${FOLDER}
+        MODEL_NAME: ${MODEL_NAME}
+        MCP_CONFIG: ${MCP_CONFIG}
+        LDAP_SERVER: ${LDAP_SERVER}
+        LDAP_PORT: ${LDAP_PORT}
+        POSTGRESQL_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "8002:8080"
+    environment:
+      POSTGRESQL_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      - postgres
+      - mcp
+
+  mcp:
+    build:
+      context: ./mcp
+      args:
+        GITLAB_URL: ${GITLAB_URL}
+        GITLAB_TOKEN: ${GITLAB_TOKEN}
+        PROJECT_PATH: ${PROJECT_PATH}
+        AIRFLOW_URL: ${AIRFLOW_URL}
+        AIRFLOW_USER: ${AIRFLOW_USER}
+        AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD}
+        KROKI_URL: 'http://kroki:8000'        
+        STORAGE_URL: 'http://minio:9000'      
+        INTERNAL_STORAGE_URL: 'http://minio:9000'
+    ports:
+      - "8001:8080"
+    environment:
+      GITLAB_URL: ${GITLAB_URL}
+      GITLAB_TOKEN: ${GITLAB_TOKEN}
+      PROJECT_PATH: ${PROJECT_PATH}
+      AIRFLOW_URL: ${AIRFLOW_URL}
+      AIRFLOW_USER: ${AIRFLOW_USER}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD}
+
+  agent:
+    build:
+      context: ./agent
+      args:
+        API_KEY: ${API_KEY}
+        BASE_URL: ${BASE_URL}
+        FOLDER: ${FOLDER}
+        MODEL_NAME: ${MODEL_NAME}
+        MCP_CONFIG: ${MCP_CONFIG}
+        GITLAB_URL: ${GITLAB_URL}
+        GITLAB_TOKEN: ${GITLAB_TOKEN}
+        PROJECT_PATH: ${PROJECT_PATH}
+        POSTGRESQL_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "8000:8080"
+    environment:
+      POSTGRESQL_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      - postgres
+      - mcp
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5431:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  kroki:
+    image: yuzutech/kroki:latest
+    ports:
+      - "8008:8000"
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  minio-setup:
+    image: minio/mc
+    depends_on:
+      - minio
+    command: >
+      /bin/sh -c "
+        echo 'Waiting for MinIO to start...';
+        sleep 15;
+        mc alias set myminio http://minio:9000 minioadmin minioadmin;
+        mc mb myminio/upload;
+        mc anonymous set download myminio/upload;
+        mc anonymous set public myminio/upload;
+        mc mb myminio/images;
+        mc anonymous set download myminio/images;
+        mc anonymous set public myminio/images;
+        echo 'MinIO buckets initialized.';
+      "
+
+volumes:
+  postgres_data:
+  minio_data:
